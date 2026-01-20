@@ -2,6 +2,7 @@ import { User } from "../models/user.model.js";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import sendEmail from "../utils/sendEmail.js";
+import speakeasy from "speakeasy";
 
 const registerUser = async (req, res) => {
   try {
@@ -115,7 +116,7 @@ const verifyEmail = async (req, res) => {
       {
         $set: { isVerified: true },
         $unset: { emailVerificationToken: "", emailVerificationExpires: "" },
-      }
+      },
     );
 
     res.status(200).json({
@@ -132,8 +133,7 @@ const verifyEmail = async (req, res) => {
 
 const loginUser = async (req, res) => {
   try {
-    // check if the user exist
-    const { email, password } = req.body;
+    const { email, password, code } = req.body;
 
     const user = await User.findOne({
       email: email.toLowerCase(),
@@ -153,17 +153,41 @@ const loginUser = async (req, res) => {
       });
     }
 
-    // ENFORCE EMAIL VERIFICATION
     if (!user.isVerified) {
       return res.status(403).json({
         message: "Please verify your email before logging in",
       });
     }
 
+    // 2FA LOGIC
+    if (user.isTwoFactorEnabled) {
+      if (!code) {
+        return res.status(200).json({
+          message: "Please enter your 6-digit 2FA code",
+          isTwoFactorEnabled: true,
+          email: user.email,
+        });
+      }
+
+      // Verify the code
+      const verified = speakeasy.totp.verify({
+        secret: user.twoFactorSecret,
+        encoding: "base32",
+        token: code,
+      });
+
+      if (!verified) {
+        return res.status(400).json({
+          message: "Invalid 2FA Code. Please try again.",
+        });
+      }
+    }
+
+    // Generate Token
     const token = jwt.sign(
       { id: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: "1d" }
+      { expiresIn: "1d" },
     );
 
     res.status(200).json({
@@ -175,6 +199,7 @@ const loginUser = async (req, res) => {
         firstName: user.firstName,
         lastName: user.lastName,
         role: user.role,
+        isTwoFactorEnabled: user.isTwoFactorEnabled,
       },
     });
   } catch (error) {
@@ -189,7 +214,6 @@ const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
 
-    // 1. Find user by email
     const user = await User.findOne({ email: email.toLowerCase() });
 
     if (!user) {
@@ -198,18 +222,12 @@ const forgotPassword = async (req, res) => {
         .json({ message: "User not found with this email" });
     }
 
-    // 2. Generate reset token (using the method in your User model)
     const resetToken = user.createPasswordResetToken();
 
-    // 3. Save the token and expiration to the database
-    // We validateBeforeSave: false to ignore other required fields if any are missing (optional but safe)
     await user.save({ validateBeforeSave: false });
 
-    // 4. Create reset URL (Frontend URL)
-    // Note: The token in the URL is the UN-HASHED version
     const resetUrl = `http://localhost:5173/reset-password/${resetToken}`;
 
-    // 5. Send Email
     const message = `
       <h2>Password Reset Request</h2>
       <p>You requested a password reset. Please click the link below to set a new password:</p>
@@ -226,7 +244,6 @@ const forgotPassword = async (req, res) => {
 
       res.status(200).json({ message: "Email sent successfully" });
     } catch (emailError) {
-      // If email fails, clear the token fields so the user can try again cleanly
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
       await user.save({ validateBeforeSave: false });
@@ -240,20 +257,16 @@ const forgotPassword = async (req, res) => {
   }
 };
 
-// @desc    Reset Password - Verifies token and updates password
-// @route   PUT /api/v1/users/reset-password/:token
 const resetPassword = async (req, res) => {
   try {
-    const { token } = req.params; // Get token from URL
+    const { token } = req.params;
     const { password, confirmPassword } = req.body;
 
-    // 1. Hash the token from URL to match the one in DB
     const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
 
-    // 2. Find user with this token AND check if it hasn't expired
     const user = await User.findOne({
       resetPasswordToken: hashedToken,
-      resetPasswordExpire: { $gt: Date.now() }, // $gt means "greater than" now
+      resetPasswordExpire: { $gt: Date.now() },
     });
 
     if (!user) {
@@ -262,16 +275,12 @@ const resetPassword = async (req, res) => {
         .json({ message: "Token is invalid or has expired" });
     }
 
-    // 3. Check password match
     if (password !== confirmPassword) {
       return res.status(400).json({ message: "Passwords do not match" });
     }
 
-    // 4. Update password
-    // Your User model has a "pre save" hook that will automatically hash this password!
     user.password = password;
 
-    // 5. Clear reset fields
     user.resetPasswordToken = undefined;
     user.resetPasswordExpire = undefined;
 

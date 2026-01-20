@@ -60,12 +60,22 @@ const userSchema = new Schema(
     emailVerificationExpires: {
       type: Date,
     },
+
     resetPasswordToken: {
       type: String,
     },
 
     resetPasswordExpire: {
       type: Date,
+    },
+  
+    twoFactorSecret: {
+      type: String,
+    },
+
+    isTwoFactorEnabled: {
+      type: Boolean,
+      default: false,
     },
   },
 
