@@ -11,3 +11,14 @@ Tech Stack
 
 Environment Variables
 To run this project, you will need to add the following environment variables to your `.env` file:
+`PORT` - (e.g., 5000)
+`MONGODB_URI` - Your MongoDB connection string
+`JWT_SECRET` - Your secret key for signing tokens
+`EMAIL_USER` - Your email address
+`EMAIL_PASS` - Your email app password
+`CLIENT_URL` - The URL of your frontend (e.g., http://localhost:3000)
+
+Getting Started
+1. Clone the repository
+   ```bash
+   git clone [https://github.com/yourusername/auth-backend.git](https://github.com/yourusername/auth-backend.git)
