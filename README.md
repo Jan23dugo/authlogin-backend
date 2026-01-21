@@ -21,4 +21,18 @@ To run this project, you will need to add the following environment variables to
 Getting Started
 1. Clone the repository
    ```bash
-   git clone [https://github.com/yourusername/auth-backend.git](https://github.com/yourusername/auth-backend.git)
+   [git clone [https://github.com/yourusername/auth-backend.git](https://github.com/yourusername/auth-backend.git)](https://github.com/Jan23dugo/authlogin-backend.git)
+
+2. Install dependencies
+   npm install
+
+3. Start the server
+   npm start
+
+API Endpoints
+Method, Endpoint, Description
+POST,/api/auth/register,Register a new user
+POST,/api/auth/login,Login and receive JWT
+POST,/api/auth/verify-email,Verify user email account
+POST,/api/auth/2fa/generate,Generate QR code for 2FA
+POST,/api/auth/2fa/verify,Verify 2FA token
